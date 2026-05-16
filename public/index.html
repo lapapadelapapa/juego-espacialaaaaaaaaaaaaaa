@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Survivor MMO</title>
+    <!-- Cargamos la librería de comunicación en tiempo real con el servidor -->
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0; padding: 0; box-sizing: border-box;
+            user-select: none; -webkit-user-select: none; touch-action: manipulation;
+        }
+        body {
+            background-color: #020617; color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; overflow: hidden; padding: 10px;
+        }
+        /* Pantalla de Registro Inicial */
+        #loginScreen {
+            position: fixed; inset: 0; background: #020617;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10; padding: 20px;
+        }
+        #loginBox {
+            background: #0f172a; border: 2px solid #38bdf8; border-radius: 16px;
+            padding: 30px; width: 100%; max-width: 360px; text-align: center;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.2);
+        }
+        #loginBox h2 { margin-bottom: 20px; color: #38bdf8; letter-spacing: 1px; }
+        #usernameInput {
+            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155;
+            background: #1e293b; color: #fff; font-size: 1rem; text-align: center; margin-bottom: 20px;
+        }
+        #usernameInput:focus { outline: 2px solid #38bdf8; }
+        #startBtn {
+            width: 100%; padding: 12px; background: #38bdf8; color: #020617;
+            border: none; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer;
+        }
+        /* Contenedores de juego */
+        #gameZone {
+            position: relative; width: 100%; max-width: 420px; height: 62vh; max-height: 550px;
+            border: 2px solid #334155; border-radius: 12px; overflow: hidden;
+        }
+        canvas { display: block; width: 100%; height: 100%; background: #020617; cursor: crosshair; }
+        
+        /* Leaderboard / Top en Pantalla */
+        #leaderboard {
+            position: absolute; top: 10px; right: 10px; background: rgba(15, 23, 42, 0.75);
+            padding: 8px 12px; border-radius: 6px; border: 1px solid #334155; font-size: 0.8rem; pointer-events: none;
+        }
+        #leaderboard h4 { color: #38bdf8; text-align: center; margin-bottom: 4px; }
+        .lb-entry { display: flex; justify-content: space-between; gap: 15px; }
+
+        #settingsPanel {
+            width: 100%; max-width: 420px; background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #334155; border-radius: 10px; padding: 6px 15px; margin-top: 5px;
+            display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; color: #94a3b8;
+        }
+        input[type="range"] { accent-color: #38bdf8; cursor: pointer; width: 100px; }
+
+        /* Controles celulares */
+        #controls { width: 100%; max-width: 420px; height: 16vh; margin-top: 8px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 12px; }
+        #joystick { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 4px; }
+        .joy-btn { background: rgba(30, 41, 59, 0.7); border: 2px solid #64748b; border-radius: 10px; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1.2rem;}
+        #btnUp { grid-column: 2; } #btnLeft { grid-column: 1; grid-row: 2; } #btnDown { grid-column: 2; grid-row: 2; } #btnRight { grid-column: 3; grid-row: 2; }
+        .btn-fire { background: rgba(30, 41, 59, 0.7); border: 2px solid #f43f5e; border-radius: 16px; color: #fff; font-size: 1.2rem; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        
+        .pc-tip { margin-top: 6px; font-size: 0.8rem; color: #64748b; display: none; text-align: center; }
+        @media (pointer: fine) { .pc-tip { display: block; } }
+    </style>
+</head>
+<body>
+
+    <!-- Pantalla Inicial de Nombre -->
+    <div id="loginScreen">
+        <div id="loginBox">
+            <h2>SPACE SURVIVOR</h2>
+            <input type="text" id="usernameInput" placeholder="Tu Nombre" maxlength="12">
+            <button id="startBtn">INGRESAR AL CAMPO</button>
+        </div>
+    </div>
+
+    <!-- Zona de juego -->
+    <div id="gameZone">
+        <canvas id="gameCanvas"></canvas>
+        <!-- Top 5 Global -->
+        <div id="leaderboard">
+            <h4>🏆 TOP 5</h4>
+            <div id="lbList"></div>
+        </div>
+    </div>
+
+    <div id="settingsPanel">
+        <span>⚙️ Sensibilidad:</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <input type="range" id="sensSlider" min="3" max="15" step="1" value="7">
+            <span id="sensValue" style="color: #38bdf8; font-weight: bold;">7</span>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div id="joystick">
+            <div class="joy-btn" id="btnUp">↑</div>
+            <div class="joy-btn" id="btnLeft">←</div>
+            <div class="joy-btn" id="btnDown">↓</div>
+            <div class="joy-btn" id="btnRight">→</div>
+        </div>
+        <div class="btn-fire" id="btnFire">FUEGO</div>
+    </div>
+
+    <div class="pc-tip">PC: Moverse con <b>WASD</b> | Disparar con <b>Click Izquierdo</b> | Enter Revivir</div>
+
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 400;
+        canvas.height = 600;
+
+        let myId = null;
+        let serverPlayers = {};
+        let serverEnemies = [];
+        let lasers = [];
+        let particles = [];
+        
+        let keys = {};
+        let moveLeft = false, moveRight = false, moveUp = false, moveDown = false;
+        let isFiring = false;
+        let currentSens = parseInt(localStorage.getItem('spaceSurvivorSens') || 7);
+
+        // UI de Configuración de velocidad
+        const slider = document.getElementById('sensSlider');
+        const sensVal = document.getElementById('sensValue');
+        slider.value = currentSens; sensVal.textContent = currentSens;
+        slider.addEventListener('input', (e) => {
+            currentSens = parseInt(e.target.value);
+            sensVal.textContent = currentSens;
+            localStorage.setItem('spaceSurvivorSens', currentSens);
+        });
+
+        // Ingreso con nombre
+        document.getElementById('startBtn').addEventListener('click', join);
+        document.getElementById('usernameInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') join(); });
+
+        function join() {
+            const name = document.getElementById('usernameInput').value.trim();
+            if(!name) return alert('¡Por favor, ponete un nombre!');
+            document.getElementById('loginScreen').style.display = 'none';
+            socket.emit('joinGame', name);
+            loop();
+        }
+
+        // --- ENTRADAS DE CONTROL MULTIPLATAFORMA ---
+        window.addEventListener('keydown', (e) => {
+            keys[e.code] = true;
+            if (e.code === 'Enter' && myId && serverPlayers[myId] && !serverPlayers[myId].active) {
+                socket.emit('respawn');
+            }
+        });
+        window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+        window.addEventListener('mousedown', (e) => { if(e.button === 0 && myId && serverPlayers[myId]?.active) isFiring = true; });
+        window.addEventListener('mouseup', (e) => { if(e.button === 0) isFiring = false; });
+        
+        canvas.addEventListener('touchstart', () => { if(myId && serverPlayers[myId] && !serverPlayers[myId].active) socket.emit('respawn'); });
+
+        setupTouch('btnUp', status => moveUp = status);
+        setupTouch('btnDown', status => moveDown = status);
+        setupTouch('btnLeft', status => moveLeft = status);
+        setupTouch('btnRight', status => moveRight = status);
+        setupTouch('btnFire', status => isFiring = status);
+
+        function setupTouch(id, cb) {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); cb(true); });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); cb(false); });
+        }
+
+        // --- RECEPCIÓN DE DATOS RED ---
+        socket.on('init', (data) => {
+            myId = data.id;
+            renderLeaderboard(data.leaderboard);
+        });
+
+        socket.on('gameState', (state) => {
+            serverPlayers = state.players;
+            serverEnemies = state.enemies;
+        });
+
+        socket.on('updateLeaderboard', (lb) => { renderLeaderboard(lb); });
+        socket.on('spawnExplosion', (p) => { createExplosion(p.x, p.y, p.color); });
+
+        function renderLeaderboard(lb) {
+            const list = document.getElementById('lbList');
+            list.innerHTML = lb.map((entry, idx) => `
+                <div class="lb-entry">
+                    <span>${idx+1}. ${entry.name}</span>
+                    <span style="color:#38bdf8">${entry.score}</span>
+                </div>
+            `).join('');
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 10; i++) {
+                particles.push({
+                    x, y,
+                    vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5,
+                    radius: Math.random() * 3 + 1, alpha: 1,
+                    decay: Math.random() * 0.02 + 0.02, color
+                });
+            }
+        }
+
+        // --- ACTUALIZACIÓN DE FÍSICAS LOCALES ---
+        function update() {
+            const me = serverPlayers[myId];
+            if (!me || !me.active) return;
+
+            // Enviar inputs al servidor en cada ciclo
+            socket.emit('updateInput', {
+                left: keys['KeyA'] || moveLeft,
+                right: keys['KeyD'] || moveRight,
+                up: keys['KeyW'] || moveUp,
+                down: keys['KeyS'] || moveDown,
+                speed: currentSens
+            });
+
+            // Disparos láser locales
+            if (isFiring) {
+                if (lasers.length === 0 || lasers[lasers.length - 1].y < me.y - 120) {
+                    lasers.push({ x: me.x + 17, y: me.y, width: 6, height: 14, speed: 12 });
+                }
+            }
+
+            // Mover láseres locales
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                lasers[i].y -= lasers[i].speed;
+                if (lasers[i].y < 0) { lasers.splice(i, 1); continue; }
+
+                // Detectar colisión local contra enemigos del servidor
+                for (let e = serverEnemies.length - 1; e >= 0; e--) {
+                    let enemy = serverEnemies[e];
+                    if (
+                        lasers[i].x < enemy.x + enemy.width &&
+                        lasers[i].x + lasers[i].width > enemy.x &&
+                        lasers[i].y < enemy.y + enemy.height &&
+                        lasers[i].y + lasers[i].height > enemy.y
+                    ) {
+                        socket.emit('enemyHit', enemy.id);
+                        lasers.splice(i, 1);
+                        break;
+                    }
+                }
+            }
+
+            // Comprobar colisión mía contra meteoritos del servidor
+            for (let enemy of serverEnemies) {
+                if (
+                    enemy.x < me.x + me.width &&
+                    enemy.x + enemy.width > me.x &&
+                    enemy.y < me.y + me.height &&
+                    enemy.y + enemy.height > me.y
+                ) {
+                    socket.emit('playerKilled');
+                }
+            }
+
+            // Partículas
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].x += particles[i].vx;
+                particles[i].y += particles[i].vy;
+                particles[i].alpha -= particles[i].decay;
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+        }
+
+        // --- DIBUJADO GRÁFICO ---
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Dibujar TODOS los jugadores conectados
+            Object.values(serverPlayers).forEach(p => {
+                if (!p.active) return;
+                ctx.fillStyle = p.color;
+                ctx.beginPath();
+                ctx.moveTo(p.x + 20, p.y);
+                ctx.lineTo(p.x + 40, p.y + 40);
+                ctx.lineTo(p.x, p.y + 40);
+                ctx.closePath();
+                ctx.fill();
+
+                // Dibujar nombres arriba de cada nave
+                ctx.fillStyle = '#94a3b8';
+                ctx.font = '10px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(p.name, p.x + 20, p.y - 6);
+                ctx.textAlign = 'left';
+            });
+
+            // Láseres
+            ctx.fillStyle = '#f43f5e';
+            lasers.forEach(l => ctx.fillRect(l.x, l.y, l.width, l.height));
+
+            // Meteoritos sincronizados
+            serverEnemies.forEach(e => {
+                ctx.fillStyle = e.color;
+                ctx.fillRect(e.x, e.y, e.width, e.height);
+            });
+
+            // Explosiones
+            particles.forEach(p => {
+                ctx.save(); ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill();
+                ctx.restore();
+            });
+
+            // Interfaz propia de puntos
+            const me = serverPlayers[myId];
+            if (me) {
+                ctx.fillStyle = '#fff';
+                ctx.font = 'bold 14px sans-serif';
+                ctx.fillText(`MIS PUNTOS: ${me.score}`, 15, 30);
+            }
+
+            // Menú de muerte
+            if (me && !me.active) {
+                ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#ff0055'; ctx.font = 'bold 26px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('FUISTE DESTRUIDO', canvas.width / 2, canvas.height / 2 - 20);
+                ctx.fillStyle = '#38bdf8'; ctx.font = 'bold 14px sans-serif';
+                ctx.fillText('PRESIONÁ ENTER O TOCÁ PARA REVIVIR', canvas.width / 2, canvas.height / 2 + 30);
+                ctx.textAlign = 'left';
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+    </script>
+</body>
+</html>
