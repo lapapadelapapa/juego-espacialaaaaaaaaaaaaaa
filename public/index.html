@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Survivor con TaTeTi Local Integrado</title>
+    <style>
+        * {
+            margin: 0; padding: 0; box-sizing: border-box;
+            user-select: none; -webkit-user-select: none; touch-action: manipulation;
+        }
+        body {
+            background-color: #020617; color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            min-height: 100vh; overflow: hidden; padding: 10px;
+        }
+        /* Pantalla de Registro Inicial */
+        #loginScreen {
+            position: fixed; inset: 0; background: #020617;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 10; padding: 20px;
+        }
+        #loginBox {
+            background: #0f172a; border: 2px solid #38bdf8; border-radius: 16px;
+            padding: 30px; width: 100%; max-width: 360px; text-align: center;
+            box-shadow: 0 0 30px rgba(0, 240, 255, 0.2);
+        }
+        #loginBox h2 { margin-bottom: 20px; color: #38bdf8; letter-spacing: 1px; }
+        #usernameInput {
+            width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #334155;
+            background: #1e293b; color: #fff; font-size: 1rem; text-align: center; margin-bottom: 20px;
+        }
+        #usernameInput:focus { outline: 2px solid #38bdf8; }
+        #startBtn {
+            width: 100%; padding: 12px; background: #38bdf8; color: #020617;
+            border: none; border-radius: 8px; font-weight: bold; font-size: 1rem; cursor: pointer;
+        }
+        /* Contenedores de juego espacial */
+        #gameZone {
+            position: relative; width: 100%; max-width: 420px; height: 65vh; max-height: 550px;
+            border: 2px solid #334155; border-radius: 12px; overflow: hidden;
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.15);
+        }
+        canvas { display: block; width: 100%; height: 100%; background: radial-gradient(circle, #0f172a 0%, #020617 100%); cursor: crosshair; }
+        
+        /* Leaderboard / Top en Pantalla */
+        #leaderboard {
+            position: absolute; top: 10px; right: 10px; background: rgba(15, 23, 42, 0.8);
+            padding: 8px 12px; border-radius: 6px; border: 1px solid #334155; font-size: 0.8rem; pointer-events: none;
+        }
+        #leaderboard h4 { color: #38bdf8; text-align: center; margin-bottom: 4px; }
+        .lb-entry { display: flex; justify-content: space-between; gap: 15px; }
+
+        #settingsPanel {
+            width: 100%; max-width: 420px; background: rgba(15, 23, 42, 0.6);
+            border: 1px solid #334155; border-radius: 10px; padding: 10px 15px; margin-top: 10px;
+            display: flex; align-items: center; justify-content: space-between; font-size: 0.9rem; color: #94a3b8;
+        }
+        .slider-container { display: flex; align-items: center; gap: 10px; flex-grow: 1; justify-content: flex-end; }
+        input[type="range"] { accent-color: #38bdf8; cursor: pointer; width: 120px; }
+
+        /* Controles móviles */
+        #controls { width: 100%; max-width: 420px; height: 16vh; margin-top: 10px; display: grid; grid-template-columns: 1.2fr 1fr; gap: 15px; }
+        #joystick { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 1fr); gap: 5px; }
+        .joy-btn { background: rgba(30, 41, 59, 0.7); border: 2px solid #64748b; border-radius: 10px; color: #fff; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .joy-btn:active { background: #64748b; }
+        #btnUp { grid-column: 2; } #btnLeft { grid-column: 1; grid-row: 2; } #btnDown { grid-column: 2; grid-row: 2; } #btnRight { grid-column: 3; grid-row: 2; }
+
+        .btn-fire { background: rgba(30, 41, 59, 0.7); border: 2px solid #f43f5e; border-radius: 16px; color: #fff; font-size: 1.3rem; font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+        .btn-fire:active { background: #f43f5e; color: #fff; }
+        
+        .pc-tip { margin-top: 8px; font-size: 0.85rem; color: #64748b; display: none; text-align: center; }
+        @media (pointer: fine) { .pc-tip { display: block; } }
+
+        /* PANEL DE BOTONES INTERACTIVOS AL MORIR */
+        #menuBotonesGameOver {
+            position: absolute; top: 62%; left: 50%; transform: translate(-50%, -50%);
+            display: none; flex-direction: column; gap: 10px; width: 85%; max-width: 280px; z-index: 5;
+        }
+        .ui-btn {
+            padding: 12px; border-radius: 10px; font-size: 0.95rem; font-weight: bold;
+            cursor: pointer; text-align: center; border: none; width: 100%; color: #fff;
+        }
+        #btnReiniciarPartida { background-color: #38bdf8; color: #020617; }
+        #btnReiniciarPartida:active { background-color: #0284c7; }
+
+        /* --- INTERFAZ DEL JUEGO TATETI INTEGRADO --- */
+        #tatetiScreen {
+            position: fixed; inset: 0; background: #020617;
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 20; padding: 20px;
+        }
+        #tatetiScreen h2 { color: #ec4899; margin-bottom: 10px; }
+        #tatetiStatus { color: #94a3b8; margin-bottom: 20px; font-size: 1.1rem; font-weight: bold; }
+        #board {
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+            width: 100%; max-width: 300px; aspect-ratio: 1; margin-bottom: 25px;
+        }
+        .cell {
+            background: #0f172a; border: 2px solid #334155; border-radius: 12px;
+            font-size: 2.5rem; font-weight: bold; display: flex; align-items: center;
+            justify-content: center; cursor: pointer; color: #fff;
+        }
+        .cell:active { background: #1e293b; }
+        .cell.X { color: #38bdf8; text-shadow: 0 0 10px rgba(56,189,248,0.5); }
+        .cell.O { color: #f43f5e; text-shadow: 0 0 10px rgba(244,63,94,0.5); }
+        .tateti-actions { display: flex; gap: 10px; width: 100%; max-width: 300px; }
+        .tateti-actions .ui-btn { padding: 10px; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+    <!-- Pantalla Inicial de Nombre -->
+    <div id="loginScreen">
+        <div id="loginBox">
+            <h2>SPACE SURVIVOR</h2>
+            <input type="text" id="usernameInput" placeholder="Tu Nombre" maxlength="12">
+            <button id="startBtn">EMPEZAR A JUGAR</button>
+        </div>
+    </div>
+
+    <!-- Zona de juego -->
+    <div id="gameZone">
+        <canvas id="gameCanvas"></canvas>
+        <!-- Top 5 Local -->
+        <div id="leaderboard">
+            <h4>🏆 TOP 5</h4>
+            <div id="lbList"></div>
+        </div>
+        
+        <!-- BOTONES QUE APARECEN AL MORIR -->
+        <div id="menuBotonesGameOver">
+            <button class="ui-btn" id="btnReiniciarPartida">REINICIAR</button>
+            <button class="ui-btn" style="background-color: #ec4899;" id="btnAbrirTatetiLocal">TATETI LOCAL (2 JUGADORES)</button>
+        </div>
+    </div>
+
+    <div id="settingsPanel">
+        <span>⚙️ Sensibilidad:</span>
+        <div class="slider-container">
+            <input type="range" id="sensSlider" min="3" max="15" step="1" value="7">
+            <span id="sensValue" style="color: #38bdf8; font-weight: bold; min-width: 20px; text-align: right;">7</span>
+        </div>
+    </div>
+
+    <div id="controls">
+        <div id="joystick">
+            <div class="joy-btn" id="btnUp">↑</div>
+            <div class="joy-btn" id="btnLeft">←</div>
+            <div class="joy-btn" id="btnDown">↓</div>
+            <div class="joy-btn" id="btnRight">→</div>
+        </div>
+        <div class="btn-fire" id="btnFire">FUEGO</div>
+    </div>
+
+    <div class="pc-tip">PC: Moverse con <b>WASD</b> | <b>1 Click = 1 Disparo</b></div>
+
+    <!-- PANTALLA TATETI PROPIA DENTRO DEL ARCHIVO -->
+    <div id="tatetiScreen">
+        <h2>TA-TE-TI LOCAL</h2>
+        <div id="tatetiStatus">Turno de: X</div>
+        <div id="board">
+            <div class="cell" data-index="0"></div>
+            <div class="cell" data-index="1"></div>
+            <div class="cell" data-index="2"></div>
+            <div class="cell" data-index="3"></div>
+            <div class="cell" data-index="4"></div>
+            <div class="cell" data-index="5"></div>
+            <div class="cell" data-index="6"></div>
+            <div class="cell" data-index="7"></div>
+            <div class="cell" data-index="8"></div>
+        </div>
+        <div class="tateti-actions">
+            <button class="ui-btn" id="btnResetTateti" style="background:#334155; color:#fff;">LIMPIAR</button>
+            <button class="ui-btn" id="btnVolverAlEspacio" style="background:#38bdf8; color:#020617;">VOLVER A LAS NAVES</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = 400;
+        canvas.height = 600;
+
+        let gameActive = false; 
+        let score = 0;
+        let level = 1;
+        let username = "Jugador";
+        
+        let keys = {};
+        let moveLeft = false, moveRight = false, moveUp = false, moveDown = false;
+
+        const savedSens = localStorage.getItem('spaceSurvivorSens') || 7;
+        
+        const player = {
+            x: canvas.width / 2 - 20, y: canvas.height - 100,
+            width: 40, height: 40,
+            speed: parseInt(savedSens), color: '#00f0ff'
+        };
+
+        const sensSlider = document.getElementById('sensSlider');
+        const sensValueDisplay = document.getElementById('sensValue');
+        sensSlider.value = player.speed;
+        sensValueDisplay.textContent = player.speed;
+
+        sensSlider.addEventListener('input', (e) => {
+            const newSens = parseInt(e.target.value);
+            player.speed = newSens;
+            sensValueDisplay.textContent = newSens;
+            localStorage.setItem('spaceSurvivorSens', newSens);
+        });
+
+        let lasers = [];
+        let enemies = [];
+        let particles = [];
+        let enemySpawnTimer = 0;
+        let enemySpawnInterval = 50;
+
+        // --- SISTEMA DE LOGEO INICIAL ---
+        document.getElementById('startBtn').addEventListener('click', startGameSession);
+        document.getElementById('usernameInput').addEventListener('keydown', (e) => { if(e.key === 'Enter') startGameSession(); });
+
+        function startGameSession() {
+            const inputName = document.getElementById('usernameInput').value.trim();
+            if(!inputName) return alert('¡Por favor, ingresá un nombre!');
+            username = inputName.substring(0, 12);
+            document.getElementById('loginScreen').style.display = 'none';
+            gameActive = true;
+            loadLeaderboard();
+            loop();
+        }
+
+        // --- SISTEMA DE DISPARO ---
+        function fireLaser() {
+            if (!gameActive) return;
+            lasers.push({ x: player.x + player.width / 2 - 3, y: player.y, width: 6, height: 14, speed: 12 });
+        }
+
+        // --- ACCIONES DE LOS BOTONES ---
+        document.getElementById('btnReiniciarPartida').addEventListener('click', () => {
+            document.getElementById('menuBotonesGameOver').style.display = 'none';
+            resetGame();
+        });
+
+        document.getElementById('btnAbrirTatetiLocal').addEventListener('click', () => {
+            document.getElementById('tatetiScreen').style.display = 'flex';
+            resetTatetiGame();
+        });
+
+        // --- CONTROLES PC (WASD + CLICK) ---
+        window.addEventListener('keydown', (e) => { keys[e.code] = true; });
+        window.addEventListener('keyup', (e) => { keys[e.code] = false; });
+
+        window.addEventListener('mousedown', (e) => {
+            if (e.button === 0 && gameActive) {
+                if(e.clientY < canvas.getBoundingClientRect().bottom) fireLaser();
+            }
+        });
+
+        // --- CONTROLES CELULAR (TOUCH) ---
+        setupTouchBtn('btnUp', status => moveUp = status);
+        setupTouchBtn('btnDown', status => moveDown = status);
+        setupTouchBtn('btnLeft', status => moveLeft = status);
+        setupTouchBtn('btnRight', status => moveRight = status);
+
+        const fireBtn = document.getElementById('btnFire');
+        fireBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            if (gameActive) fireLaser();
+        });
+
+        function setupTouchBtn(id, callback) {
+            const btn = document.getElementById(id);
+            if(!btn) return;
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); callback(true); });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); callback(false); });
+        }
+
+        // --- MANEJO DEL TOP 5 LOCAL ---
+        function saveScore() {
+            let scores = JSON.parse(localStorage.getItem('spaceSurvivorTop')) || [];
+            scores.push({ name: username, score: score });
+            scores.sort((a, b) => b.score - a.score);
+            scores = scores.slice(0, 5); 
+            localStorage.setItem('spaceSurvivorTop', JSON.stringify(scores));
+            loadLeaderboard();
+        }
+
+        function loadLeaderboard() {
+            const scores = JSON.parse(localStorage.getItem('spaceSurvivorTop')) || [];
+            const list = document.getElementById('lbList');
+            list.innerHTML = scores.map((entry, idx) => `
+                <div class="lb-entry">
+                    <span>${idx+1}. ${entry.name}</span>
+                    <span style="color:#38bdf8">${entry.score}</span>
+                </div>
+            `).join('');
+        }
+
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 12; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 5, vy: (Math.random() - 0.5) * 5,
+                    radius: Math.random() * 3 + 1, alpha: 1,
+                    decay: Math.random() * 0.02 + 0.02, color: color
+                });
+            }
+        }
+
+        function resetGame() {
+            player.x = canvas.width / 2 - 20;
+            player.y = canvas.height - 100;
+            lasers = []; enemies = []; particles = [];
+            score = 0; level = 1; enemySpawnInterval = 50;
+            gameActive = true;
+            loop();
+        }
+
+        function update() {
+            if (!gameActive) return;
+
+            if ((keys['KeyA'] || moveLeft) && player.x > 0) player.x -= player.speed;
+            if ((keys['KeyD'] || moveRight) && player.x < canvas.width - player.width) player.x += player.speed;
+            if ((keys['KeyW'] || moveUp) && player.y > 0) player.y -= player.speed;
+            if ((keys['KeyS'] || moveDown) && player.y < canvas.height - player.height) player.y += player.speed;
+
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                lasers[i].y -= lasers[i].speed;
+                if (lasers[i].y < 0) lasers.splice(i, 1);
+            }
+
+            enemySpawnInterval = Math.max(16, 50 - Math.floor(score / 12) * 5);
+            level = Math.floor(score / 12) + 1;
+
+            enemySpawnTimer++;
+            if (enemySpawnTimer >= enemySpawnInterval) {
+                enemySpawnTimer = 0;
+                const size = Math.random() * 25 + 20;
+                enemies.push({
+                    x: Math.random() * (canvas.width - size), y: -size,
+                    width: size, height: size,
+                    speed: Math.random() * 1.5 + 2.5 + (level * 0.35),
+                    color: `hsl(${Math.random() * 35}, 80%, 55%)`
+                });
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                enemies[i].y += enemies[i].speed;
+                if (enemies[i].y > canvas.height) {
+                    enemies.splice(i, 1);
+                    score = Math.max(0, score - 1);
+                    continue;
+                }
+
+                if (
+                    enemies[i].x < player.x + player.width &&
+                    enemies[i].x + enemies[i].width > player.x &&
+                    enemies[i].y < player.y + player.height &&
+                    enemies[i].y + enemies[i].height > player.y
+                ) {
+                    createExplosion(player.x + player.width/2, player.y + player.height/2, '#ff0055');
+                    gameActive = false;
+                    saveScore(); 
+                    document.getElementById('menuBotonesGameOver').style.display = 'flex'; 
+                }
+            }
+
+            for (let l = lasers.length - 1; l >= 0; l--) {
+                for (let e = enemies.length - 1; e >= 0; e--) {
+                    if (
+                        lasers[l] &&
+                        lasers[l].x < enemies[e].x + enemies[e].width &&
+                        lasers[l].x + lasers[l].width > enemies[e].x &&
+                        lasers[l].y < enemies[e].y + enemies[e].height &&
+                        lasers[l].y + lasers[l].height > enemies[e].y
+                    ) {
+                        createExplosion(enemies[e].x + enemies[e].width/2, enemies[e].y + enemies[e].height/2, enemies[e].color);
+                        enemies.splice(e, 1); lasers.splice(l, 1);
+                        score += 2;
+                        break;
+                    }
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].x += particles[i].vx; particles[i].y += particles[i].vy;
+                particles[i].alpha -= particles[i].decay;
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = "rgba(255,255,255,0.12)";
+            for(let i=0; i<3; i++){
+                ctx.fillRect(Math.sin(Date.now()*0.001 + i)*150 + 200, (Date.now()*0.1 + i*150)%canvas.height, 2, 2);
+            }
+
+            if (gameActive) {
+                ctx.fillStyle = player.color;
+                ctx.shadowBlur = 12; ctx.shadowColor = player.color;
+                ctx.beginPath();
+                ctx.moveTo(player.x + player.width / 2, player.y);
+                ctx.lineTo(player.x + player.width, player.y + player.height);
+                ctx.lineTo(player.x, player.y + player.height);
+                ctx.closePath(); ctx.fill(); ctx.shadowBlur = 0;
+            }
+
+            ctx.fillStyle = '#f43f5e';
+            lasers.forEach(l => ctx.fillRect(l.x, l.y, l.width, l.height));
+            enemies.forEach(e => { ctx.fillStyle = e.color; ctx.fillRect(e.x, e.y, e.width, e.height); });
+            particles.forEach(p => {
+                ctx.save(); ctx.globalAlpha = p.alpha; ctx.fillStyle = p.color;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+            });
+
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif';
+            ctx.fillText(`PUNTOS: ${score}`, 15, 30);
+            ctx.fillText(`NIVEL: ${level}`, 15, 55);
+
+            if (!gameActive && document.getElementById('loginScreen').style.display === 'none') {
+                ctx.fillStyle = 'rgba(2, 6, 23, 0.85)';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+                ctx.fillStyle = '#ff0055'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('FIN DE LA PARTIDA', canvas.width / 2, canvas.height / 2 - 90);
+
+                ctx.fillStyle = '#fff'; ctx.font = '16px sans-serif';
+                ctx.fillText(`Puntaje de ${username}: ${score} | Nivel: ${level}`, canvas.width / 2, canvas.height / 2 - 40);
+                ctx.textAlign = 'left';
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            if (gameActive) {
+                requestAnimationFrame(loop);
+            } else {
+                draw();
+            }
+        }
+
+        // --- CÓDIGO INTERNO JUEGO TATETI LOCAL (MISMA PANTALLA) ---
+        let tBoard = ["", "", "", "", "", "", "", "", ""];
+        let tTurno = "X"; // Alterna entre X y O
+        let tActivo = true;
+
+        const tCells = document.querySelectorAll('.cell');
+        const tStatus = document.getElementById('tatetiStatus');
+
+        tCells.forEach(cell => cell.addEventListener('click', (e) => {
+            const idx = e.target.getAttribute('data-index');
+            if (tBoard[idx] !== "" || !tActivo) return;
+
+            tBoard[idx] = tTurno;
+            e.target.textContent = tTurno;
+            e.target.classList.add(tTurno);
+
+            if (checkGanador(tTurno)) {
+                tStatus.textContent = `¡Ganador: Jugador ${tTurno}! 🎉`;
+                tActivo = false;
+                return;
+            }
+            if (!tBoard.includes("")) {
+                tStatus.textContent = "¡Empate! 🤝";
+                tActivo = false;
+                return;
+            }
+
+            // Cambiar de turno
+            tTurno = (tTurno === "X") ? "O" : "X";
+            tStatus.textContent = `Turno de: ${tTurno}`;
+        }));
+
+        function checkGanador(p) {
+            const combinaciones = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+            return combinaciones.some(c => c.every(i => tBoard[i] === p));
+        }
+
+        function resetTatetiGame() {
+            tBoard = ["", "", "", "", "", "", "", "", ""];
+            tTurno = "X"; tActivo = true;
+            tStatus.textContent = "Turno de: X";
+            tCells.forEach(c => { c.textContent = ""; c.className = "cell"; });
+        }
+
+        document.getElementById('btnResetTateti').addEventListener('click', resetTatetiGame);
+        document.getElementById('btnVolverAlEspacio').addEventListener('click', () => {
+            document.getElementById('tatetiScreen').style.display = 'none';
+            document.getElementById('menuBotonesGameOver').style.display = 'none';
+            resetGame();
+        });
+    </script>
+</body>
+</html>
